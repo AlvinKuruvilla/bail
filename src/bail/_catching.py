@@ -35,7 +35,7 @@ import inspect
 from collections.abc import Callable, Coroutine
 from typing import Any, overload
 
-from bail._core import Err, Ok, Result
+from bail._result import Err, Ok, Result
 
 __all__ = ["catching"]
 

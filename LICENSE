@@ -22,7 +22,7 @@ SOFTWARE.
 
 ---
 
-src/bail/_core.py is ported from rustshed
+src/bail/_option.py and src/bail/_result.py are ported from rustshed
 (https://github.com/pawelrubin/rustshed), distributed under this licence:
 
 MIT License
