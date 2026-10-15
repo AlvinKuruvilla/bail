@@ -158,6 +158,15 @@ class _Result(ABC, Generic[T, E]):  # noqa: UP046 -- declared variance, see modu
         names the missing decorator.
         """
 
+    @abstractmethod
+    def _bail_lint_q(self, sink: Callable[[Err[E]], None], /) -> T:
+        """`.Q` as bail-lint's BAIL002 rewrite spells it. Not part of the API.
+
+        `sink` is never called. Its type is the check: the rewrite passes a
+        sink typed to accept the enclosing function's declared return type, so
+        the call type-checks only if every `Err` this `.Q` can return fits it.
+        """
+
 
 @final
 class Ok(_Result[T, Never]):
@@ -263,6 +272,9 @@ class Ok(_Result[T, Never]):
     def Q(self) -> T:
         return self._value
 
+    def _bail_lint_q(self, sink: Callable[[Err[Never]], None], /) -> T:
+        return self._value
+
 
 @final
 class Err(_Result[Never, E]):
@@ -362,6 +374,9 @@ class Err(_Result[Never, E]):
 
     @property
     def Q(self) -> NoReturn:
+        raise Bail(self)
+
+    def _bail_lint_q(self, sink: Callable[[Err[E]], None], /) -> NoReturn:
         raise Bail(self)
 
     def _panic(self, message: str) -> NoReturn:

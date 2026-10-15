@@ -1,4 +1,8 @@
-"""BAIL001: `.Q` outside a `@bails` function."""
+"""bail-lint: BAIL001 (`.Q` outside `@bails`) and BAIL002 (undeclared `Err`)."""
+
+# The rewrite test checks line numbers and sink positions, which only the
+# private helpers expose.
+# pyright: reportPrivateUsage=false
 
 from __future__ import annotations
 
@@ -7,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from bail.lint import check_source, main
+from bail.lint import CheckerError, _rewrite, _visit, check_source, check_types, main
 
 
 def codes(source: str) -> list[tuple[int, str]]:
@@ -201,3 +205,69 @@ def test_main_reports_unparseable_files(
     (tmp_path / "broken.py").write_text("def (:\n")
     assert main([str(tmp_path)]) == 2
     assert "cannot check" in capsys.readouterr().err
+
+
+# BAIL002: `.Q` returning an Err the function does not declare.
+#
+# These run a real type checker on the project in tests/fixtures/bail002, so
+# they take a second or two each. Every function in its app.py is named for
+# the outcome it expects.
+
+FIXTURE = Path(__file__).parent / "fixtures" / "bail002"
+
+EXPECTED_LEAKS = [
+    (30, 38, "`Err[KeyError]`", "leaks"),
+    (35, 23, "`Null()`", "option_in_result"),
+    (50, 25, "`Err[KeyError]`", "async_leaks"),
+    (66, 29, "`Err[KeyError]`", "method_leaks"),
+]
+
+
+@pytest.mark.parametrize("checker", ["mypy", "pyright"])
+def test_bail002_reports_exactly_the_leaks(checker: str) -> None:
+    findings = check_types([FIXTURE / "pkg"], checker, FIXTURE)
+
+    assert [
+        (f.line, f.column, f.message.split(" can return ")[1].split(",")[0], f.code)
+        for f in findings
+    ] == [
+        (line, column, bailed, "BAIL002") for line, column, bailed, _ in EXPECTED_LEAKS
+    ]
+    for finding, (_, _, _, function) in zip(findings, EXPECTED_LEAKS, strict=True):
+        assert f"`{function}` does not declare" in finding.message
+
+
+def test_bail002_respects_the_ignore_comment(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(FIXTURE)
+    assert main(["--checker", "pyright", "pkg"]) == 1
+    out = capsys.readouterr().out
+    assert "ignored" not in out
+    assert out.count("BAIL002") == len(EXPECTED_LEAKS)
+
+
+def test_rewrite_keeps_line_numbers_and_finds_the_sink() -> None:
+    source = textwrap.dedent("""\
+        from bail import bails
+
+        @bails
+        def pair(a, b) -> Result[int, str]:
+            return Ok((parse(a).Q, parse("é").Q))
+        """)
+    rewritten, sites = _rewrite(source, _visit(source, "app.py"))
+    original_lines = source.splitlines()
+    new_lines = rewritten.splitlines()
+
+    assert new_lines[: len(original_lines) - 1] == original_lines[:-1]
+    assert [site.line for site in sites] == [5, 5]
+    for site in sites:
+        sink = new_lines[site.line - 1][site.sink_column - 1 :]
+        assert sink.startswith(
+            "_bail_typing.cast('_bail_abc.Callable[[Result[int, str]]"
+        )
+
+
+def test_unknown_checker_is_an_error() -> None:
+    with pytest.raises(CheckerError, match="unknown checker"):
+        check_types([FIXTURE / "pkg"], "pytype", FIXTURE)

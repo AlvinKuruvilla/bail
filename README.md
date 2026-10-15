@@ -124,15 +124,22 @@ For a one-off call, use it inline: `catching(ValueError)(int)(text)`.
 
 ## Lint
 
-A `.Q` outside a `@bails` function type-checks but raises at runtime. `bail-lint`
-reports it:
+Two mistakes with `.Q` type-check but go wrong at runtime. `bail-lint` reports
+both:
+
+| Code | Reports |
+|---|---|
+| `BAIL001` | a `.Q` outside a `@bails` function |
+| `BAIL002` | a `.Q` that can return an `Err` the function does not declare |
 
 ```console
-$ bail-lint src
-src/app.py:12:31: BAIL001 `.Q` in `load`, which is not decorated with `@bails`; an Err here escapes as an exception
+$ bail-lint --checker pyright src
+src/app.py:30:38: BAIL002 `.Q` can return `Err[KeyError]`, which `load` does not declare: it returns `Result[int, str]`
 ```
 
-Add `# bail: ignore` to a line to suppress a finding.
+`BAIL002` runs your type checker, mypy or pyright, so it needs `--checker`.
+Without it, only `BAIL001` runs. Add `# bail: ignore` to a line to suppress a
+finding.
 
 ## Why bail
 

@@ -223,6 +223,15 @@ class _Option(ABC, Generic[T]):  # noqa: UP046 -- declared variance, see module 
         names the missing decorator.
         """
 
+    @abstractmethod
+    def _bail_lint_q(self, sink: Callable[[Null], None], /) -> T:
+        """`.Q` as bail-lint's BAIL002 rewrite spells it. Not part of the API.
+
+        `sink` is never called. Its type is the check: the rewrite passes a
+        sink typed to accept the enclosing function's declared return type, so
+        the call type-checks only if every `Null()` this `.Q` can return fits it.
+        """
+
 
 @final
 class Some(_Option[T]):
@@ -350,6 +359,9 @@ class Some(_Option[T]):
     def Q(self) -> T:
         return self._value
 
+    def _bail_lint_q(self, sink: Callable[[Never], None], /) -> T:
+        return self._value
+
 
 @final
 class Null(_Option[Never]):
@@ -452,6 +464,9 @@ class Null(_Option[Never]):
 
     @property
     def Q(self) -> NoReturn:
+        raise Bail(self)
+
+    def _bail_lint_q(self, sink: Callable[[Null], None], /) -> NoReturn:
         raise Bail(self)
 
 

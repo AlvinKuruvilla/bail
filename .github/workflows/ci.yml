@@ -26,5 +26,9 @@ jobs:
       - run: uv run pyright src tests examples
       - run: uv run pytest
       - run: uv run bail-lint src tests examples
+      # BAIL002 under both checkers. tests/ holds a fixture with deliberate
+      # leaks, which test_lint.py checks instead.
+      - run: uv run bail-lint --checker mypy src examples
+      - run: uv run bail-lint --checker pyright src examples
       - run: for example in examples/*.py; do uv run python "$example"; done
       - run: uv run pip-audit

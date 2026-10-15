@@ -109,14 +109,18 @@ bail closes this gap with a lint, `bail-lint`, run outside the type system:
   3.12 (PEP 709), so they do not count. Any attribute named `Q` counts, since
   the rule has no types, and `# bail: ignore` suppresses a false positive.
 - **BAIL002, error-type leak**: a `.Q` whose operand's `E` is not assignable to
-  the function's declared `E`. Not yet implemented. The lint will rewrite each
-  `X.Q` in a `@bails` function into `_q(X, _sink)`, where `_sink` accepts the
-  declared return type and `_q` requires `Callable[[Err[E]], None]`. Passing
-  `_sink` there type-checks only when `Err[E]` is assignable to the declared
-  type. The user's own checker, mypy or pyright, runs on a shadow copy of the
-  project and decides. A probe confirmed both checkers flag exactly the
-  leaking cases. The rewrite stays within each line, so diagnostics map back
-  by line number.
+  the function's declared `E`, checked with `--checker mypy|pyright`. The lint
+  rewrites each `X.Q` in a `@bails` function into
+  `X._bail_lint_q(<sink>)`, where the sink is cast to
+  `Callable[[<declared return type>], None]` and `Err[E]._bail_lint_q` requires
+  `Callable[[Err[E]], None]`. The argument type-checks only when `Err[E]` is
+  assignable to the declared type. The method lives on the classes so that a
+  union operand is checked member by member. The user's own checker runs on a
+  temporary copy of the project and decides. The rewrite replaces only the `Q`
+  token and appends its imports at the end of the file, so line numbers do not
+  change and each diagnostic on an inserted sink maps back to its `.Q`. The
+  fixture in `tests/fixtures/bail002` gives identical findings under both
+  checkers.
 
 A mypy plugin was rejected: it would serve mypy users only, and finding the
 enclosing function's declared type from an attribute hook relies on
