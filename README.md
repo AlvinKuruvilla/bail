@@ -107,14 +107,12 @@ Python Result libraries differ in whether the type checker sees an exhaustive
 | Library | `match` narrows | Missing arm reported | Maintained |
 |---|---|---|---|
 | **bail** | mypy, pyright | mypy, pyright | yes |
-| [returns](https://github.com/dry-python/returns) 0.29 | pyright only | no | yes |
-| [expression](https://github.com/dbrattli/Expression) 5.7 | via `tag=` only | no | yes |
-| [rustshed](https://github.com/pawelrubin/rustshed) 0.5 | mypy, pyright | mypy, pyright | no release since 2022 |
-| [result](https://github.com/rustedpy/result) 0.17 | mypy, pyright | mypy, pyright | archived |
+| [returns](https://github.com/dry-python/returns) | pyright only | no | yes |
+| [expression](https://github.com/dbrattli/Expression) | via `tag=` only | no | yes |
+| [rustshed](https://github.com/pawelrubin/rustshed) | mypy, pyright | mypy, pyright | no release since 2022 |
+| [result](https://github.com/rustedpy/result) | mypy, pyright | mypy, pyright | archived |
 
-Measured 2026-10-14 with mypy 2.4.0 and pyright 1.1.414. [`DESIGN.md`](DESIGN.md)
-covers the method and the trade-offs, including what the type checkers cannot
-verify about `.Q`.
+The design and its trade-offs are in [`DESIGN.md`](DESIGN.md).
 
 ## Examples
 
