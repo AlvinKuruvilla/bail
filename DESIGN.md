@@ -126,10 +126,62 @@ A mypy plugin was rejected: it would serve mypy users only, and finding the
 enclosing function's declared type from an attribute hook relies on
 `api.scope`, which is outside mypy's plugin interface.
 
+## Exceptions declared in the return type
+
+`@bails` turns a raised exception into an `Err` when the function's declared
+error type names its class:
+
+```python
+@bails
+def load(path: Path) -> Result[Config, OSError | JSONDecodeError]:
+    return Ok(Config(**json.loads(path.read_text())))  # OSError -> Err(OSError)
+```
+
+The signature already promises `Err(OSError)`; without this, a raised
+`OSError` broke that promise by propagating. So the change only affects
+functions whose behaviour contradicted their own type, and bail had no
+users when it was made.
+
+- **What is caught.** `Exception` subclasses named in `E`, including their
+  subclasses. Value types such as `str`, type variables, and returns that are
+  not a `Result` (an `Option`, or `Result[...] | None`) catch nothing.
+  `type` aliases are expanded. A `BaseException` that is not an `Exception`,
+  such as `KeyboardInterrupt`, is refused with a `TypeError`.
+- **When the annotation is read.** On the first call, then cached. A decorator
+  runs as soon as its `def` executes, before the rest of the module exists,
+  so a class defined further down would not resolve at decoration time.
+  Resolving then would also force a Python 3.15 `lazy` import (PEP 810) to
+  load immediately: annotationlib reifies lazy imports when it evaluates an
+  annotation (`Lib/annotationlib.py` at v3.15.0, `ForwardRef.evaluate`).
+- **Only the return annotation is evaluated.** Parameters annotated with
+  types imported under `TYPE_CHECKING` are never touched. On 3.14 the return
+  annotation comes from `annotationlib`'s FORWARDREF format; on 3.12 and 3.13
+  from `__annotations__`, with string annotations evaluated against the
+  module's globals and the function's type parameters.
+- **The cost.** The return annotation must resolve at runtime. A name imported
+  only under `if TYPE_CHECKING:` makes the first call raise `TypeError`, whose
+  message names both fixes: a runtime import, or adding `"bail.bails"` to
+  ruff's `runtime-evaluated-decorators`, which ruff provides for decorators
+  such as pydantic's `@validate_call` that read annotations the same way.
+  Because the failure waits for the first call, a rarely run function could
+  hit it late. bail-lint's BAIL003 reports such names statically.
+
+Rejected alternatives:
+
+- **An explicit list, `@bails(OSError, JSONDecodeError)`.** No runtime
+  annotation reading, but the error types are written twice and can drift,
+  which is how rustshed's `to_result[IndexError]` came to catch every
+  `Exception`. A lint rule could check the list against the annotation, but
+  only for people who run the lint.
+- **Resolving at decoration time.** Earlier failures, but forward references
+  would break and `lazy` imports would load at import time.
+
 ## Exception bridge
 
-tryhard's `MUST` and `TRY` become one decorator, `@catching`, which turns the
-listed exceptions into an `Err` holding the exception, traceback included:
+tryhard's `MUST` and `TRY` become `@catching`, for functions that return a plain
+value: code you don't own, or code you'd rather not rewrite to return a `Result`.
+It turns the listed exceptions into an `Err` holding the exception, traceback
+included:
 
 ```python
 @catching(OSError, json.JSONDecodeError)
@@ -177,6 +229,10 @@ one place. The licence and copyright notice travel with the ported files.
   outside any `@bails` escapes as an exception, not as an `Err`.
   rustshed has the same behaviour.
 - **Fork maintenance**: copying rustshed means owning its bugs.
+- **Load-bearing annotations**: `@bails` reads its function's return type at
+  runtime, so that annotation cannot use names imported only for type
+  checking. In exchange the error types are written once, in the signature,
+  and cannot drift from what is caught.
 
 # Open questions
 

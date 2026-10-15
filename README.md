@@ -103,34 +103,39 @@ def add(a: str, b: str) -> Result[int, str]:
 
 ### Code that raises
 
-`@catching` turns the exceptions you list into an `Err` holding the exception.
-Anything else still raises.
+In a `@bails` function, an exception whose class is named in the declared error
+type comes back as an `Err`. Anything else still raises.
 
 ```python
 import json
 
-from bail import catching
+from bail import Ok, Result, bails
 
 
-@catching(KeyError, json.JSONDecodeError)
-def port_from(raw: str) -> int:
-    return int(json.loads(raw)["port"])
+@bails
+def port_from(raw: str) -> Result[int, KeyError | json.JSONDecodeError]:
+    return Ok(int(json.loads(raw)["port"]))
 
 
-port_from("{}")  # Err(KeyError('port')): Result[int, KeyError | JSONDecodeError]
+port_from("{}")  # Err(KeyError('port'))
 ```
 
-For a one-off call, use it inline: `catching(ValueError)(int)(text)`.
+The return annotation is read at runtime, so its names cannot be imported only
+under `if TYPE_CHECKING:`. If ruff moves them there, add `"bail.bails"` to
+`lint.flake8-type-checking.runtime-evaluated-decorators`.
+
+To wrap a function that returns a plain value, such as one you don't own, use
+`@catching`, or call it inline: `catching(ValueError)(int)(text)`.
 
 ## Lint
 
-Two mistakes with `.Q` type-check but go wrong at runtime. `bail-lint` reports
-both:
+Some mistakes type-check but go wrong at runtime. `bail-lint` reports them:
 
 | Code | Reports |
 |---|---|
 | `BAIL001` | a `.Q` outside a `@bails` function |
 | `BAIL002` | a `.Q` that can return an `Err` the function does not declare |
+| `BAIL003` | a name in a `@bails` return type imported only under `TYPE_CHECKING` |
 
 ```console
 $ bail-lint --checker pyright src
@@ -138,7 +143,7 @@ src/app.py:30:38: BAIL002 `.Q` can return `Err[KeyError]`, which `load` does not
 ```
 
 `BAIL002` runs your type checker, mypy or pyright, so it needs `--checker`.
-Without it, only `BAIL001` runs. Add `# bail: ignore` to a line to suppress a
+Without it, `BAIL001` and `BAIL003` run. Add `# bail: ignore` to a line to suppress a
 finding.
 
 ## Why bail
@@ -165,6 +170,7 @@ Each file in [`examples/`](examples/) shows one feature and runs as-is:
 | [`result.py`](examples/result.py) | returning and matching a `Result` |
 | [`option.py`](examples/option.py) | returning and matching an `Option` |
 | [`early_return.py`](examples/early_return.py) | `.Q` and `@bails` |
+| [`declared_errors.py`](examples/declared_errors.py) | exceptions named in the return type |
 | [`catching.py`](examples/catching.py) | `@catching` |
 
 ## Development
