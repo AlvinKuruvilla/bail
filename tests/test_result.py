@@ -249,10 +249,16 @@ def test_and_then() -> None:
     assert Ok(-1).and_then(sqrt_then_to_string) == Err("math domain error")
     assert Err("not a number").and_then(sqrt_then_to_string) == Err("not a number")
 
-    root_mtime = path_stat("/").and_then(lambda stat: Ok(stat.st_mtime))
+    # A function that only returns Ok leaves the second error type unsolved;
+    # pyright reports it as Unknown unless the target is annotated.
+    root_mtime: Result[float, FileNotFoundError] = path_stat("/").and_then(
+        lambda stat: Ok(stat.st_mtime)
+    )
     assert root_mtime.is_ok()
 
-    missing_mtime = path_stat("/bad/path").and_then(lambda stat: Ok(stat.st_mtime))
+    missing_mtime: Result[float, FileNotFoundError] = path_stat("/bad/path").and_then(
+        lambda stat: Ok(stat.st_mtime)
+    )
     assert missing_mtime.is_err()
 
 

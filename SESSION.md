@@ -14,3 +14,11 @@
   pyright got them right. A small standalone repro hasn't reproduced it yet.
   It might be worth a mypy issue once it's minimised. The pre-change version
   is in tmp/core_before_variance.py.
+- `and_then` with a function that only ever returns `Ok` leaves `F`
+  unsolved, so pyright reports the result as `Err[Unknown]` unless the
+  target is annotated. mypy infers `Never`. A PEP 696 default
+  (`F = Never`) would fix it, but that syntax needs 3.13 and the
+  `TypeVar(default=)` form needs typing_extensions on 3.12.
+- The template's pre-commit hook pins ruff v0.9.0, which is older than the
+  ruff in uv.lock. The newer one also formats Python blocks inside
+  Markdown, so the hook and CI can disagree.

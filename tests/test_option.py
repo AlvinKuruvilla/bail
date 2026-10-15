@@ -180,11 +180,14 @@ def test_and_then() -> None:
 
     arr_2d = [["A0", "A1"], ["B0", "B1"]]
 
-    item_0_1 = get(arr_2d, 0).and_then(lambda row: get(row, 1))
-    assert item_0_1 == Some("A1")
+    def first(row: list[str]) -> Option[str]:
+        return get(row, 0)
 
-    item_2_0 = get(arr_2d, 2).and_then(lambda row: get(row, 0))
-    assert item_2_0 == Null()
+    def second(row: list[str]) -> Option[str]:
+        return get(row, 1)
+
+    assert get(arr_2d, 0).and_then(second) == Some("A1")
+    assert get(arr_2d, 2).and_then(first) == Null()
 
 
 def test_filter() -> None:

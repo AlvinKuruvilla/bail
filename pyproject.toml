@@ -70,3 +70,7 @@ testpaths = ["tests"]
 [tool.coverage.run]
 source = ["src"]
 branch = true
+
+[tool.pyright]
+pythonVersion = "3.12"
+typeCheckingMode = "strict"

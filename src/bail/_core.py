@@ -239,7 +239,10 @@ class Some(_Option[T]):
         return self._value
 
     def __eq__(self, other: object) -> bool:
-        return isinstance(other, Some) and self._value == other._value
+        if not isinstance(other, Some):
+            return False
+        theirs = cast("Some[object]", other)  # isinstance leaves T unknown
+        return bool(self._value == theirs._value)
 
     def __hash__(self) -> int:
         return hash((Some, self._value))
@@ -593,7 +596,10 @@ class Ok(_Result[T, Never]):
         return self._value
 
     def __eq__(self, other: object) -> bool:
-        return isinstance(other, Ok) and self._value == other._value
+        if not isinstance(other, Ok):
+            return False
+        theirs = cast("Ok[object]", other)  # isinstance leaves T unknown
+        return bool(self._value == theirs._value)
 
     def __hash__(self) -> int:
         return hash((Ok, self._value))
@@ -695,7 +701,10 @@ class Err(_Result[Never, E]):
         return self._error
 
     def __eq__(self, other: object) -> bool:
-        return isinstance(other, Err) and self._error == other._error
+        if not isinstance(other, Err):
+            return False
+        theirs = cast("Err[object]", other)  # isinstance leaves T unknown
+        return bool(self._error == theirs._error)
 
     def __hash__(self) -> int:
         return hash((Err, self._error))
