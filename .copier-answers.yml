@@ -1,0 +1,18 @@
+# Records the answers given when this project was scaffolded, so the
+# template can be re-applied later with `copier update` (or `aria update`).
+# Managed by Copier — do not edit by hand.
+_src_path: /Users/alvinkuruvilla/Dev/aria/templates/python
+author_email: alvineasokuruvilla@gmail.com
+author_name: Alvin Kuruvilla
+description: A Result type for Python with exhaustive match and early return
+include_ci: true
+include_docs: false
+include_precommit: true
+include_security_scan: true
+license: MIT
+package_name: bail
+project_name: bail
+project_slug: bail
+project_type: lib
+python_floor: '3.12'
+type_checker: mypy
