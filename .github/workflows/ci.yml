@@ -22,7 +22,8 @@ jobs:
       - run: uv run ruff format --check .
       # The tests assert type narrowing and variance, so both checkers must see
       # them: a regression there fails type-checking, not pytest.
-      - run: uv run mypy src tests
-      - run: uv run pyright src tests
+      - run: uv run mypy src tests examples
+      - run: uv run pyright src tests examples
       - run: uv run pytest
+      - run: for example in examples/*.py; do uv run python "$example"; done
       - run: uv run pip-audit
