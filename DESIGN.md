@@ -113,17 +113,34 @@ output. Users have to opt in to it.
 
 ## Exception bridge
 
-tryhard's `MUST`/`TRY` become one decorator and one call form, both returning
-`Result`:
+tryhard's `MUST` and `TRY` become one decorator, `@catching`, which turns the
+listed exceptions into an `Err` holding the exception, traceback included:
 
 ```python
-@catching(json.JSONDecodeError)
-def load(raw: str) -> dict[str, object]:
-    return json.loads(raw)  # -> Result[dict[str, object], JSONDecodeError]
+@catching(OSError, json.JSONDecodeError)
+def load(path: Path) -> dict[str, object]:
+    return json.loads(path.read_text())  # Result[..., OSError | JSONDecodeError]
 
 
-config = attempt(json.loads, raw, catch=(json.JSONDecodeError,))
+port = catching(ValueError)(int)(raw)  # inline, for a one-off call
 ```
+
+- **Exception subclasses only.** `KeyboardInterrupt`, `SystemExit` and the
+  exception behind `.Q` derive from `BaseException`, so they always propagate.
+  This replaces tryhard's list of exceptions to pass through.
+- **At least one type.** There is no bare `@catching` that catches everything.
+  rustshed's `to_result[IndexError]` caught every `Exception` while its type
+  said `IndexError`.
+- **A union error type.** mypy joins several types bound to one type parameter
+  (`OSError` and `JSONDecodeError` become `Exception`), so overloads for one to
+  four types bind one parameter each. Past four, mypy falls back to the join.
+- **No `attempt`.** An earlier draft had `attempt(fn, *args, catch=...)` for
+  one-off calls. The inline form above does the same with full typing, and
+  PEP 612 does not allow a keyword parameter between `*args: P.args` and
+  `**kwargs: P.kwargs`.
+- **No generators.** A generator's exceptions are raised during iteration,
+  after the decorated call has returned, so `@catching` rejects generator
+  functions with a `TypeError`.
 
 `VERIFY` and `CHECK` have no Result equivalent. They assert invariants and should
 still raise. Whether they stay in bail or are dropped is an open question.
@@ -148,9 +165,7 @@ one place. The licence and copyright notice travel with the ported files.
 
 # Open questions
 
-1. **Option type**: rustshed ships `Some | Null` with its own `.Q`. Keep it, or
-   ship Result only.
-2. **`VERIFY`/`CHECK`**: keep them as tryhard-compatible assertion helpers, or
+1. **`VERIFY`/`CHECK`**: keep them as tryhard-compatible assertion helpers, or
    drop them.
-3. **Do-notation as an optional mode** if pyright#11881 is fixed.
-4. **Lint implementation**: mypy plugin or a standalone checker.
+2. **Do-notation as an optional mode** if pyright#11881 is fixed.
+3. **Lint implementation**: mypy plugin or a standalone checker.

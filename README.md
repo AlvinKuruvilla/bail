@@ -22,6 +22,7 @@
   - [Result](#result)
   - [Option](#option)
   - [Early return with `.Q`](#early-return-with-q)
+  - [Code that raises](#code-that-raises)
 - [Why bail](#why-bail)
 - [Examples](#examples)
 - [Development](#development)
@@ -99,6 +100,27 @@ def add(a: str, b: str) -> Result[int, str]:
 
 `@bails` also works on `async def` functions.
 
+### Code that raises
+
+`@catching` turns the exceptions you list into an `Err` holding the exception.
+Anything else still raises.
+
+```python
+import json
+
+from bail import catching
+
+
+@catching(KeyError, json.JSONDecodeError)
+def port_from(raw: str) -> int:
+    return int(json.loads(raw)["port"])
+
+
+port_from("{}")  # Err(KeyError('port')): Result[int, KeyError | JSONDecodeError]
+```
+
+For a one-off call, use it inline: `catching(ValueError)(int)(text)`.
+
 ## Why bail
 
 Python Result libraries differ in whether the type checker sees an exhaustive
@@ -123,6 +145,7 @@ Each file in [`examples/`](examples/) shows one feature and runs as-is:
 | [`result.py`](examples/result.py) | returning and matching a `Result` |
 | [`option.py`](examples/option.py) | returning and matching an `Option` |
 | [`early_return.py`](examples/early_return.py) | `.Q` and `@bails` |
+| [`catching.py`](examples/catching.py) | `@catching` |
 
 ## Development
 
