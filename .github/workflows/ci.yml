@@ -25,5 +25,6 @@ jobs:
       - run: uv run mypy src tests examples
       - run: uv run pyright src tests examples
       - run: uv run pytest
+      - run: uv run bail-lint src tests examples
       - run: for example in examples/*.py; do uv run python "$example"; done
       - run: uv run pip-audit

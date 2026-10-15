@@ -100,16 +100,27 @@ def leaks(key: str) -> Result[int, str]:
     return Ok(lookup(key).Q)  # returns Err(KeyError) from a Result[int, str]
 ```
 
-bail closes this gap with a lint run outside the type system. It has two rules:
+bail closes this gap with a lint, `bail-lint`, run outside the type system:
 
-- **Error-type leak**: for each `.Q` inside a `@bails` function, the operand's
-  `E` must be assignable to the function's declared `E`.
-- **Missing decorator**: a `.Q` in a function without `@bails` is an error.
-  The checker sees `.Q` as returning `T`, so the code type-checks, but at
-  runtime the `Err` escapes as an exception.
+- **BAIL001, missing decorator**: a `.Q` whose enclosing function is not
+  decorated with `@bails`. Syntactic, and implemented. The enclosing function
+  is the innermost `def`, `async def`, `lambda` or generator expression; list,
+  set and dict comprehensions run inline in the function's frame since Python
+  3.12 (PEP 709), so they do not count. Any attribute named `Q` counts, since
+  the rule has no types, and `# bail: ignore` suppresses a false positive.
+- **BAIL002, error-type leak**: a `.Q` whose operand's `E` is not assignable to
+  the function's declared `E`. Not yet implemented. The lint will rewrite each
+  `X.Q` in a `@bails` function into `_q(X, _sink)`, where `_sink` accepts the
+  declared return type and `_q` requires `Callable[[Err[E]], None]`. Passing
+  `_sink` there type-checks only when `Err[E]` is assignable to the declared
+  type. The user's own checker, mypy or pyright, runs on a shadow copy of the
+  project and decides. A probe confirmed both checkers flag exactly the
+  leaking cases. The rewrite stays within each line, so diagnostics map back
+  by line number.
 
-The implementation is open: a mypy plugin, or a script built on pyright's type
-output. Users have to opt in to it.
+A mypy plugin was rejected: it would serve mypy users only, and finding the
+enclosing function's declared type from an attribute hook relies on
+`api.scope`, which is outside mypy's plugin interface.
 
 ## Exception bridge
 
@@ -168,4 +179,3 @@ one place. The licence and copyright notice travel with the ported files.
 1. **`VERIFY`/`CHECK`**: keep them as tryhard-compatible assertion helpers, or
    drop them.
 2. **Do-notation as an optional mode** if pyright#11881 is fixed.
-3. **Lint implementation**: mypy plugin or a standalone checker.

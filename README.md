@@ -23,6 +23,7 @@
   - [Option](#option)
   - [Early return with `.Q`](#early-return-with-q)
   - [Code that raises](#code-that-raises)
+- [Lint](#lint)
 - [Why bail](#why-bail)
 - [Examples](#examples)
 - [Development](#development)
@@ -120,6 +121,18 @@ port_from("{}")  # Err(KeyError('port')): Result[int, KeyError | JSONDecodeError
 ```
 
 For a one-off call, use it inline: `catching(ValueError)(int)(text)`.
+
+## Lint
+
+A `.Q` outside a `@bails` function type-checks but raises at runtime. `bail-lint`
+reports it:
+
+```console
+$ bail-lint src
+src/app.py:12:31: BAIL001 `.Q` in `load`, which is not decorated with `@bails`; an Err here escapes as an exception
+```
+
+Add `# bail: ignore` to a line to suppress a finding.
 
 ## Why bail
 

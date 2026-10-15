@@ -66,7 +66,7 @@ def test_except_exception_does_not_swallow_the_early_return() -> None:
 
 def test_q_without_bails_names_the_missing_decorator() -> None:
     def undecorated() -> Result[int, str]:
-        return Ok(parse_digit("x").Q)
+        return Ok(parse_digit("x").Q)  # bail: ignore
 
     with pytest.raises(BaseException, match="outside a `@bails` function"):
         undecorated()
@@ -77,7 +77,7 @@ def test_q_in_an_undecorated_helper_returns_from_the_nearest_bails() -> None:
     # nearest `@bails` up the stack, not to the function containing `.Q`. The
     # lint reports the `.Q` in `helper` as missing its decorator.
     def helper(raw: str) -> int:
-        return parse_digit(raw).Q
+        return parse_digit(raw).Q  # bail: ignore
 
     @bails
     def outer(raw: str) -> Result[int, str]:
