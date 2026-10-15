@@ -10,11 +10,15 @@ runtime, and this module reports them:
 - **BAIL002**: a `.Q` that can return an `Err` (or `Null()`) the enclosing
   function's declared return type does not allow. Only checked with
   `--checker`, because it runs a type checker.
+- **BAIL003**: a name in a `@bails` function's return annotation that is
+  imported only under `if TYPE_CHECKING:`. `@bails` evaluates the return
+  annotation at runtime to find the exceptions it declares, so the name must
+  exist then; otherwise the first call raises `TypeError`.
 
 Run it on files or directories:
 
-    bail-lint src tests                     # BAIL001 only
-    bail-lint --checker pyright src tests   # BAIL001 and BAIL002
+    bail-lint src tests                     # BAIL001 and BAIL003
+    bail-lint --checker pyright src tests   # all three
 
 It prints one line per finding and exits 1 if there were any. A finding on a
 line containing `# bail: ignore` is suppressed.
@@ -118,17 +122,20 @@ class Finding:
 
 
 def check_source(source: str, path: str = "<string>") -> list[Finding]:
-    """Return the BAIL001 findings for one module's source text, in source order.
+    """Return the BAIL001 and BAIL003 findings for one module's source text.
 
-    Raises `SyntaxError` if `source` does not parse.
+    Findings are in source order. Raises `SyntaxError` if `source` does not
+    parse.
     """
     visitor = _visit(source, path)
-    return _unignored(visitor.findings, source)
+    findings = [*visitor.findings, *_type_checking_only_findings(visitor)]
+    findings.sort(key=lambda f: (f.line, f.column, f.code))
+    return _unignored(findings, source)
 
 
 def _visit(source: str, path: str) -> _Visitor:
     tree = ast.parse(source, filename=path)
-    visitor = _Visitor(path, _bails_names(tree))
+    visitor = _Visitor(path, _bails_names(tree), tree)
     visitor.visit(tree)
     return visitor
 
@@ -156,8 +163,16 @@ def _bails_names(tree: ast.Module) -> tuple[frozenset[str], frozenset[str]]:
 
 
 class _Visitor(ast.NodeVisitor):
-    def __init__(self, path: str, names: tuple[frozenset[str], frozenset[str]]) -> None:
+    def __init__(
+        self,
+        path: str,
+        names: tuple[frozenset[str], frozenset[str]],
+        tree: ast.Module,
+    ) -> None:
         self.path = path
+        self.tree = tree
+        # Every function decorated with `@bails`, for BAIL003.
+        self.bails_functions: list[_Function] = []
         self.bare_names, self.module_names = names
         self.findings: list[Finding] = []
         # Each `.Q` that is correctly inside `@bails`, with its function, for
@@ -183,6 +198,8 @@ class _Visitor(ast.NodeVisitor):
         for expr in [*node.decorator_list, *node.args.defaults, *node.args.kw_defaults]:
             if expr is not None:
                 self.visit(expr)
+        if self._is_bails(node):
+            self.bails_functions.append(node)
         self.scopes.append(node)
         for statement in node.body:
             self.visit(statement)
@@ -256,6 +273,102 @@ def _q_position(node: ast.Attribute) -> tuple[int, int]:
     """
     assert node.end_lineno is not None and node.end_col_offset is not None
     return node.end_lineno, node.end_col_offset
+
+
+# BAIL003
+
+
+def _type_checking_only_findings(visitor: _Visitor) -> list[Finding]:
+    """Report names in `@bails` return annotations that only exist for checkers."""
+    hidden = _type_checking_only_names(visitor.tree)
+    if not hidden:
+        return []
+    findings: list[Finding] = []
+    for function in visitor.bails_functions:
+        if function.returns is None:
+            continue
+        for name, line, column in _annotation_names(function.returns):
+            if name in hidden:
+                findings.append(
+                    Finding(
+                        visitor.path,
+                        line,
+                        column,
+                        "BAIL003",
+                        f"`{name}` is imported only under `TYPE_CHECKING`, but "
+                        f"`@bails` reads `{function.name}`'s return type at runtime; "
+                        'import it normally, or add "bail.bails" to ruff\'s '
+                        "runtime-evaluated-decorators if ruff moved it",
+                    )
+                )
+    return findings
+
+
+def _type_checking_only_names(tree: ast.Module) -> frozenset[str]:
+    """Return module-level names bound under `if TYPE_CHECKING:` and nowhere else.
+
+    A name also bound outside such a block, including in its `else:` branch,
+    exists at runtime and is not returned.
+    """
+    hidden: set[str] = set()
+    hidden_blocks: list[ast.stmt] = []
+    for statement in tree.body:
+        if isinstance(statement, ast.If) and _is_type_checking(statement.test):
+            hidden_blocks.extend(statement.body)
+            for hidden_statement in statement.body:
+                hidden.update(_imported_names(hidden_statement))
+
+    inside_hidden = {id(n) for block in hidden_blocks for n in ast.walk(block)}
+    visible: set[str] = set()
+    for node in ast.walk(tree):
+        if id(node) in inside_hidden:
+            continue
+        visible.update(_imported_names(node))
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
+            visible.add(node.name)
+        elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
+            visible.add(node.id)
+        elif isinstance(node, ast.TypeAlias):
+            visible.add(node.name.id)
+    return frozenset(hidden - visible)
+
+
+def _is_type_checking(test: ast.expr) -> bool:
+    # `TYPE_CHECKING`, or `typing.TYPE_CHECKING` under any module alias.
+    if isinstance(test, ast.Name):
+        return test.id == "TYPE_CHECKING"
+    return isinstance(test, ast.Attribute) and test.attr == "TYPE_CHECKING"
+
+
+def _imported_names(node: ast.AST) -> list[str]:
+    if isinstance(node, ast.Import):
+        # `import json.decoder` binds `json`.
+        return [a.asname or a.name.split(".")[0] for a in node.names]
+    if isinstance(node, ast.ImportFrom):
+        return [a.asname or a.name for a in node.names if a.name != "*"]
+    return []
+
+
+def _annotation_names(annotation: ast.expr) -> list[tuple[str, int, int]]:
+    """Return each name an annotation reads, with its 1-based line and column.
+
+    A string annotation is parsed, and its names are reported at the string.
+    """
+    if isinstance(annotation, ast.Constant) and isinstance(annotation.value, str):
+        try:
+            parsed = ast.parse(annotation.value, mode="eval")
+        except SyntaxError:
+            return []
+        return [
+            (node.id, annotation.lineno, annotation.col_offset + 1)
+            for node in ast.walk(parsed)
+            if isinstance(node, ast.Name)
+        ]
+    return [
+        (node.id, node.lineno, node.col_offset + 1)
+        for node in ast.walk(annotation)
+        if isinstance(node, ast.Name)
+    ]
 
 
 # BAIL002

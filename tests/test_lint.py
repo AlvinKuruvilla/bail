@@ -271,3 +271,76 @@ def test_rewrite_keeps_line_numbers_and_finds_the_sink() -> None:
 def test_unknown_checker_is_an_error() -> None:
     with pytest.raises(CheckerError, match="unknown checker"):
         check_types([FIXTURE / "pkg"], "pytype", FIXTURE)
+
+
+# BAIL003: names in a `@bails` return annotation that only type checkers see.
+
+
+def test_bail003_flags_a_type_checking_only_name_in_the_return_type() -> None:
+    assert codes("""
+        from typing import TYPE_CHECKING
+        from bail import Result, bails
+
+        if TYPE_CHECKING:
+            from decimal import InvalidOperation
+
+        @bails
+        def divide(raw) -> Result[int, InvalidOperation]:
+            return Ok(1)
+        """) == [(9, "BAIL003")]
+
+
+def test_bail003_reads_string_annotations() -> None:
+    assert codes("""
+        import typing
+        from bail import bails
+
+        if typing.TYPE_CHECKING:
+            from json import JSONDecodeError
+
+        @bails
+        def parse(raw) -> "Result[int, JSONDecodeError]":
+            return Ok(1)
+        """) == [(9, "BAIL003")]
+
+
+def test_bail003_ignores_names_that_also_exist_at_runtime() -> None:
+    assert (
+        codes("""
+            from typing import TYPE_CHECKING
+            from bail import Result, bails
+            from json import JSONDecodeError
+
+            if TYPE_CHECKING:
+                from json import JSONDecodeError
+                from decimal import InvalidOperation
+            else:
+                InvalidOperation = ArithmeticError
+
+            @bails
+            def parse(raw) -> Result[int, JSONDecodeError | InvalidOperation]:
+                return Ok(1)
+            """)
+        == []
+    )
+
+
+def test_bail003_ignores_parameter_annotations_and_undecorated_functions() -> None:
+    # `@bails` evaluates only the return annotation, and only its own.
+    assert (
+        codes("""
+            from typing import TYPE_CHECKING
+            from bail import Result, bails
+
+            if TYPE_CHECKING:
+                from decimal import InvalidOperation
+
+            @bails
+            def parse(raw: InvalidOperation) -> Result[int, ValueError]:
+                return Ok(1)
+
+            def plain() -> Result[int, InvalidOperation]:
+                return Ok(1)
+            """)
+        == []
+    )

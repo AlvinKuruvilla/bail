@@ -133,7 +133,7 @@ class ConfigError(Exception):
 
 def test_type_checking_only_name_raises_a_type_error_naming_the_fix() -> None:
     @bails
-    def divide(raw: str) -> Result[int, InvalidOperation]:
+    def divide(raw: str) -> Result[int, InvalidOperation]:  # bail: ignore
         return Ok(int(raw))
 
     with pytest.raises(TypeError, match="runtime-evaluated-decorators") as raised:
